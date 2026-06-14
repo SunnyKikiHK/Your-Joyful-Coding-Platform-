@@ -1,0 +1,30 @@
+#env variables
+.env
+.env.*
+
+#python virtual env
+venv/
+env/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+build/
+dist/
+*.egg-info/
+
+#macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+#VScode stuffs
+.vscode/
+*.code-workspace
+
+#database and logs
+*.db
+*.sqlite3
+*.log
