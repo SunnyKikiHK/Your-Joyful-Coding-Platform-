@@ -1,17 +1,24 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+#import database engine and models
+from src.db.database import engine
+from src.db import models
+from src.api import auth
+
+#create sql tables in if they don't exist yet
+models.Base.metadata.create_all(bind=engine)
+
 app = FastAPI(
-    title="YOUR JOYFUL CODING PLATFORM",
-    description="Backend",
+    title="LeetCode AI Clone API",
+    description="Backend for AI-powered code evaluation platform",
     version="0.1.0"
 )
 
 origins = [
-    "http://localhost:3000",  # Common for React/Next.js
-    "http://localhost:5173",  # Common for Vite
+    "http://localhost:3000",
+    "http://localhost:5173",
     "http://127.0.0.1:8000"
-    #more later
 ]
 
 app.add_middleware(
@@ -22,9 +29,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
+
 @app.get("/")
 def health_check():
-    return {
-        "status": "healthy", 
-        "message": "Welcome to the YOUR JOYFUL CODING PLATFORM API"
-    }
+    return {"status": "healthy", "message": "Welcome to the LeetCode AI API"}
