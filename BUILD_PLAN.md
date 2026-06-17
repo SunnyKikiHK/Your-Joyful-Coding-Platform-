@@ -1,6 +1,6 @@
 # Your Joyful Coding Platform — Phased Build Plan
 
-This README is the **build companion** to `WORKFLOW_ARCHITECTURE_C.md` and `AGENT_ARCHITECTURE.md`. It lists the exact scripts to create or update in each phase, and what each function does. Read the architecture docs first for *why*; this file tells you *what to type and where*.
+This document is the **build companion** to `WORKFLOW_ARCHITECTURE_C.md` and `AGENT_ARCHITECTURE.md`. It lists the exact scripts to create or update in each phase, and what each function does. Read the architecture docs first for *why*; this file tells you *what to type and where*.
 
 > **Total estimate:** ~6 weeks, one phase per week. Don't skip ahead — each phase produces a runnable, testable slice.
 
@@ -454,7 +454,8 @@ Your-Joyful-Coding-Platform-/
 ├── WORKFLOW_ARCHITECTURE_C.md        (read first)
 ├── WORKFLOW_ARCHITECTURE_C_中文版.md
 ├── AGENT_ARCHITECTURE.md
-└── README.md                         (this file)
+├── BUILD_PLAN.md                     (this file)
+└── README.md                         (project root readme)
 ```
 
 ---

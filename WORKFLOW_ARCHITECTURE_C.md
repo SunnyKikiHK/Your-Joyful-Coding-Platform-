@@ -1,6 +1,8 @@
 # Workflow Architecture — Architecture C (Blackboard + Coordinator)
 
 > Companion to `AGENT_ARCHITECTURE.md` Section 3. This document zooms in on **how** the blackboard + coordinator pattern runs end-to-end during a real coding session: lifecycle, message sequences, state machines, conflict resolution, latency budget, error paths, and the failure modes you need to design against.
+>
+> **Also available in Chinese:** [`WORKFLOW_ARCHITECTURE_C_中文版.md`](./WORKFLOW_ARCHITECTURE_C_中文版.md) — same content, restructured for readability, with six Mermaid diagrams. Good for design reviews and team discussions.
 
 ---
 
@@ -54,6 +56,236 @@
 
 The blackboard is the **single source of truth** for "what is happening right now in this session." Every agent is a loop: *read → think → propose → wait for turn*.
 
+### 1.1 Mermaid Version (GitHub / VSCode renderable)
+
+If you prefer a renderable diagram (for READMEs, design reviews, or the GitHub wiki), here is the same architecture in Mermaid.
+
+#### 1.1.1 System-Level View (components + data flow)
+
+```mermaid
+flowchart TB
+    %% External actors
+    User([User in browser])
+    Editor[Editor MCP]
+    ExecMCP[Execution MCP]
+
+    %% Gateway
+    Gateway[/FastAPI Gateway<br/>auth, rate-limit, WS/]
+
+    %% Core
+    Coordinator{{"Coordinator<br/>(state machine)"}}
+    Reflection{{"Reflection / Critic<br/>(read-only)"}}
+
+    Mentor[/"Mentor<br/>(writer + reader)"/]
+    Analyzer[/"Analyzer<br/>(writer + reader)"/]
+    Planner[/"Planner<br/>(writer + reader)"/]
+
+    %% Blackboard sub-graph
+    subgraph Blackboard["BLACKBOARD (per session, versioned)"]
+        BB_Ctx["problem_context<br/>(immutable)"]
+        BB_Code["code_snapshot"]
+        BB_Time["timeline[]<br/>(append-only)"]
+        BB_Stuck["stuck_hypotheses[]"]
+        BB_Plan["learning_plan_draft"]
+        BB_Open["open_questions_for_user"]
+        BB_Speech["mentor_speech_buffer"]
+    end
+
+    %% MCP
+    MCP[("MCP Tool Layer<br/>problems / execution /<br/>user / editor / curriculum")]
+
+    %% Edges
+    User <-->|WS events / chat| Gateway
+    Editor -->|code.events| Gateway
+    ExecMCP -->|test.results| Gateway
+
+    Gateway -->|publish events| BB_Time
+    Gateway -->|push code| BB_Code
+
+    Mentor <-->|propose / read| Coordinator
+    Analyzer <-->|propose / read| Coordinator
+    Planner <-->|propose / read| Coordinator
+
+    Coordinator -->|grant speaking token| Mentor
+    Coordinator <-->|veto / approve| Reflection
+
+    Mentor -->|propose open_q| Coordinator
+    Coordinator -->|commit| BB_Open
+    Coordinator -->|commit| BB_Stuck
+    Coordinator -->|commit| BB_Plan
+
+    Mentor -. read .-> BB_Time
+    Analyzer -. read .-> BB_Time
+    Planner -. read .-> BB_Time
+
+    Mentor <-->|read / call| MCP
+    Analyzer <-->|read / call| MCP
+    Planner <-->|read / call| MCP
+
+    Coordinator -->|broadcast version bump| Mentor
+    Coordinator -->|broadcast version bump| Analyzer
+    Coordinator -->|broadcast version bump| Planner
+
+    Gateway -->|push to user| User
+
+    %% Styling
+    classDef agent fill:#1f6feb,stroke:#0b3d91,color:#fff
+    classDef coord fill:#d29922,stroke:#7d5a00,color:#000
+    classDef store fill:#238636,stroke:#0a3d1c,color:#fff
+    classDef io fill:#6e7681,stroke:#3a3f47,color:#fff
+    classDef external fill:#8957e5,stroke:#5a3a9c,color:#fff
+
+    class Mentor,Analyzer,Planner agent
+    class Coordinator,Reflection coord
+    class BB_Ctx,BB_Code,BB_Time,BB_Stuck,BB_Plan,BB_Open,BB_Speech store
+    class Gateway,MCP io
+    class User,Editor,ExecMCP external
+```
+
+#### 1.1.2 Blackboard Sections (write-policy view)
+
+```mermaid
+flowchart LR
+    subgraph Writers["Writers"]
+        BE[Backend]
+        EM[Editor MCP]
+        AN[Analyzer]
+        TC[Planner]
+        MN[Mentor]
+        CO[Coordinator]
+    end
+
+    subgraph Sections["Blackboard Sections"]
+        S1["problem_context<br/>immutable"]
+        S2["code_snapshot<br/>last-writer-wins"]
+        S3["timeline[]<br/>append-only"]
+        S4["stuck_hypotheses[]<br/>highest-conf-wins"]
+        S5["learning_plan_draft<br/>atomic replace"]
+        S6["open_questions_for_user<br/>2-phase commit"]
+        S7["mentor_speech_buffer<br/>single-writer"]
+    end
+
+    BE -->|on session start| S1
+    EM -->|push, debounced 250ms| S2
+    BE -->|append| S3
+    AN -->|append| S3
+    MN -->|append| S3
+    TC -->|append| S3
+
+    AN -->|upsert| S4
+    TC -->|replace| S5
+    MN -->|draft| S6
+    CO -->|approve / commit| S6
+    CO -->|write| S7
+```
+
+#### 1.1.3 Coordinator State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> IDLE
+
+    IDLE --> EvaluateProposal: event in
+    IDLE --> ScheduleTurn: external trigger
+
+    EvaluateProposal --> ApplyToBlackboard: accept
+    EvaluateProposal --> NackProposer: reject (stale / duplicate / needs reflection)
+    NackProposer --> IDLE: agent re-reads & retries
+
+    ApplyToBlackboard --> ScheduleTurn: section requires speaking
+    ApplyToBlackboard --> IDLE: silent commit
+
+    ScheduleTurn --> AwaitReflection: reflection_required
+    ScheduleTurn --> PushToUser: direct push (P0 user message)
+
+    AwaitReflection --> ApplyToBlackboard: APPROVE
+    AwaitReflection --> AwaitDraft: REVISE
+    AwaitReflection --> IDLE: VETO (drop, log)
+
+    AwaitDraft --> AwaitReflection: Mentor re-drafts
+
+    PushToUser --> IDLE: ws push complete
+
+    IDLE --> SessionEnd: SESSION_ENDED event
+    SessionEnd --> [*]
+```
+
+#### 1.1.4 Sequence: "User is stuck for 2 minutes"
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as User
+    participant FE as Browser
+    participant FW as FastAPI
+    participant CO as Coordinator
+    participant AN as Analyzer
+    participant BB as Blackboard
+    participant MN as Mentor
+    participant RF as Reflection
+
+    Note over FW: idle-tick fires<br/>(user silent 2 min)
+    FW->>CO: idle event
+    CO->>AN: read BB + timeline
+    AN-->>CO: propose stuck_hypotheses.upsert<br/>(claim, conf=0.81)
+    CO->>BB: COMMIT (version v++)
+    BB-->>CO: ack
+    CO->>CO: schedule P3 turn<br/>(conf >= 0.8 AND idle >= 60s)
+    CO->>MN: grant speaking token
+    MN->>BB: read code_snapshot + stuck_hypotheses + learning_plan
+    MN-->>CO: propose open_questions_for_user.replace<br/>(draft hint)
+    CO->>RF: review draft
+    alt APPROVE
+        RF-->>CO: approve
+        CO->>BB: COMMIT open_questions (v++)
+        CO->>FE: WS push "Want a nudge?"
+        FE->>U: render message
+    else VETO
+        RF-->>CO: veto (reason)
+        CO->>BB: append timeline (MENTOR_VETO)
+        Note over CO,MN: Mentor re-drafts
+    end
+```
+
+#### 1.1.5 Token-Priority Flow (P0–P5)
+
+```mermaid
+flowchart TD
+    Start([New event in]) --> P0{Q: User message in chat?}
+
+    P0 -- yes --> TokenP0[/"P0 - Direct user message<br/>after 150ms debounce"/]
+    P0 -- no --> P1{Q: Reflection veto returned?}
+
+    P1 -- yes --> TokenP1[/"P1 - Re-draft turn"/]
+    P1 -- no --> P2{Q: open_q updated by Mentor<br/>and Reflection approved?}
+
+    P2 -- yes --> TokenP2[/"P2 - Push approved question"/]
+    P2 -- no --> P3{Q: stuck_hypothesis conf >= 0.8<br/>AND user idle >= 60s?}
+
+    P3 -- yes --> SuppressCheck{Suppress?<br/>throttle / user-typing /<br/>recent-passing-test}
+    SuppressCheck -- no --> TokenP3[/"P3 - Proactive hint<br/>min 90s gap"/]
+    SuppressCheck -- yes --> Drop[/"Drop, log to timeline"/]
+    P3 -- no --> P4{Q: learning_plan_draft updated<br/>on session end or Practice UI?}
+
+    P4 -- yes --> TokenP4[/"P4 - Background update<br/>no user ping"/]
+    P4 -- no --> P5{Q: test.results failed<br/>AND no Mentor msg in 30s?}
+
+    P5 -- yes --> TokenP5[/"P5 - Just-in-time hint"/]
+    P5 -- no --> Idle([Stay silent])
+```
+
+#### 1.1.6 How to Read These Diagrams
+
+| Diagram | Best for |
+|---|---|
+| 1.1.1 (system view) | Architecture reviews, READMEs, design wikis |
+| 1.1.2 (write policies) | Showing "who can edit what" in code review |
+| 1.1.3 (state machine) | Debugging Coordinator behavior |
+| 1.1.4 (sequence) | Walking through a specific user scenario |
+| 1.1.5 (token priority) | Understanding the suppression rules |
+
+All six render natively in **GitHub**, **GitLab**, **VSCode** (with the Mermaid extension), **Obsidian**, and **Notion**. No external tooling required.
+
 ---
 
 ## 2. The Blackboard: Sections, Versions, and Ownership
@@ -68,7 +300,7 @@ The blackboard is a per-session, versioned, sectioned document. Every write prod
 | `code_snapshot` | `{language, content, cursor, last_edited_at}` | Editor MCP (push) | All | **Last-writer-wins**, debounced 250 ms |
 | `timeline[]` | append-only array of `TimelineEvent` | All (only appends) | All | **Append-only**, no overwrite |
 | `stuck_hypotheses[]` | array of `{claim, confidence, evidence[], author, ts, status}` | Analyzer | Mentor, Coordinator, Reflection | **Highest-confidence-wins**; older claims marked `superseded` |
-| `learning_plan_draft` | `{weak_topics[], next_problems[], concept_review[], version}` | Teacher | Coordinator, Mentor | **Whole-section replace** (atomic) |
+| `learning_plan_draft` | `{weak_topics[], next_problems[], concept_review[], version}` | Planner | Coordinator, Mentor | **Whole-section replace** (atomic) |
 | `open_questions_for_user` | `{questions[], awaiting_user_response_to, draft_by, reviewed_by}` | Mentor (writes), Reflection (vetoes) | Front-end, Mentor | **Two-phase commit** — Mentor drafts, Reflection approves |
 | `mentor_speech_buffer` | `{pending, last_pushed, suppressed_count}` | Coordinator (writes) | Mentor | **Single-writer** — only Coordinator |
 
@@ -330,7 +562,7 @@ Loop while user is in "read mode" (no edits for >5 s):
   - Editor MCP pushes cursor moves and selection changes → timeline
   - Analyzer stays quiet (no StuckReport yet)
   - Mentor is silent (P0 only)
-  - Teacher may pre-compute a candidate learning_plan_draft using
+  - Planner may pre-compute a candidate learning_plan_draft using
     user.mcp.get_user_profile(user_id), but does not write yet.
 ```
 
@@ -344,7 +576,7 @@ For each user action (keystroke, paste, run-tests, chat-msg, idle-tick):
   2. execution MCP on test run → blackboard.timeline (kind: TEST_RUN)
   3. Coordinator fans out the event to subscribers:
        - Analyzer: re-evaluates stuckness from new timeline slice
-       - Teacher: lazily re-ranks weak topics if the new evidence shifts things
+       - Planner: lazily re-ranks weak topics if the new evidence shifts things
        - Mentor: does nothing (awaits a token)
 
 When Analyzer decides a new stuck_hypothesis is warranted:
@@ -382,7 +614,7 @@ When user replies in chat:
 5. Mentor produces a two-paragraph review:
      (a) what worked
      (b) one concrete thing to improve next time, grounded in the hypothesis log
-6. Teacher is granted a P4 turn (background, no user ping):
+6. Planner is granted a P4 turn (background, no user ping):
      - reads full session timeline
      - updates learning_plan_draft
 7. Reflection approves both → push review to user; update profile mastery deltas.
@@ -394,7 +626,7 @@ When user replies in chat:
 ```text
 1. User closes the tab OR explicit "End session" click OR idle > 30 min.
 2. Coordinator emits SESSION_ENDED to timeline.
-3. Teacher finalizes learning_plan_draft (atomic replace).
+3. Planner finalizes learning_plan_draft (atomic replace).
 4. user-mcp.update_mastery(...) is called for each affected topic.
 5. Blackboard is archived to cold storage (Postgres) for replay.
 6. WebSocket closed.
@@ -460,7 +692,7 @@ Because every event lands in the timeline and every blackboard section is versio
 
 3. **A/B test policies.** Swap the Coordinator's priority function, replay the historical timelines through a stub Coordinator, and compare token-grant distributions.
 
-4. **Train Teacher offline.** The Teacher's `learning_plan_draft` history plus the user's actual next-week outcomes is a clean supervised dataset.
+4. **Train Planner offline.** The Planner's `learning_plan_draft` history plus the user's actual next-week outcomes is a clean supervised dataset.
 
 Replay entry point (pseudocode):
 
@@ -577,7 +809,7 @@ Required traces (OpenTelemetry):
 | Proposal protocol | `src/services/blackboard/proposal.py` |
 | Mentor agent | `src/services/agents/mentor.py` |
 | Analyzer agent | `src/services/agents/analyzer.py` |
-| Teacher agent | `src/services/agents/teacher.py` |
+| Planner agent | `src/services/agents/teacher.py` |
 | Reflection / Critic | `src/services/agents/reflection.py` |
 | MCP clients | `src/services/mcp/` (one file per server) |
 | Replay harness | `src/services/replay/simulator.py` |
@@ -606,8 +838,8 @@ If you want to ship Architecture C without burning out, the order matters.
 - Replace Reflection stub with a real LLM check (non-spoiler, tone, safety).
 - Add the two-phase commit for `open_questions_for_user`.
 
-### Phase 3 — Teacher in the loop (1 week)
-- Wire Teacher reading `timeline` and writing `learning_plan_draft`.
+### Phase 3 — Planner in the loop (1 week)
+- Wire Planner reading `timeline` and writing `learning_plan_draft`.
 - Add a "Practice these" card on session end.
 
 ### Phase 4 — Replay + observability (1 week)

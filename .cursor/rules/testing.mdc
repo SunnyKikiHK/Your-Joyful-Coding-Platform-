@@ -1,0 +1,67 @@
+---
+description: Testing conventions for the Joyful Coding Platform backend. Apply to all files under tests/.
+globs: ["tests/**/*.py", "**/test_*.py", "**/*_test.py"]
+alwaysApply: false
+---
+
+# Testing Conventions
+
+## 1. Framework
+
+- **pytest** as the test runner (not unittest).
+- **httpx** for async/sync HTTP testing against FastAPI routes.
+- **pytest-asyncio** only if a test is genuinely async; otherwise prefer sync tests since the DB is sync.
+
+## 2. File & function naming
+
+- Test files: `test_<module>.py`, mirroring the source path under `tests/`.
+- Test functions: `test_<unit_under_test>_<scenario>_<expected_outcome>`.
+  - `test_get_user_by_email_existing_user_returns_user`
+  - `test_register_user_duplicate_email_returns_400`
+- Group related tests in classes only when they share meaningful fixture setup. Prefer module-level fixtures otherwise.
+
+## 3. Fixtures
+
+- Scope fixtures as narrowly as possible. Default to `function` scope; use `module`/`session` only for read-only resources.
+- Use `conftest.py` for fixtures shared across multiple test files.
+- The DB session fixture must always roll back at the end of the test:
+  ```python
+  @pytest.fixture
+  def db():
+      session = TestingSessionLocal()
+      try:
+          yield session
+      finally:
+          session.rollback()
+          session.close()
+  ```
+- Never use a production DB for tests. Use a dedicated test DB or SQLite-in-memory.
+
+## 4. Test isolation
+
+- Each test must be independent. Don't rely on execution order.
+- Clean up created records in fixture teardown, not in the test body.
+- For time-dependent code, freeze time with `freezegun` or `time-machine`.
+- For async code, use `pytest-asyncio` with explicit mode selection.
+
+## 5. Coverage targets
+
+- Aim for 80% line coverage minimum on `src/`.
+- 100% coverage on security-critical code: authentication, authorization, password handling, token signing.
+- Coverage is a guardrail, not a goal. A test that exercises code without asserting correctness is a coverage tax.
+
+## 6. Test types
+
+- **Unit tests** (`tests/unit/`): pure functions, no DB, no HTTP.
+- **Integration tests** (`tests/integration/`): DB + HTTP via `TestClient`.
+- **E2E tests** (`tests/e2e/`): full stack with WebSocket, multi-agent flows.
+- Mark slow tests with `@pytest.mark.slow` and exclude from default CI runs.
+
+## 7. Assertions
+
+- Use plain `assert` statements, not `unittest`-style `self.assertEqual`.
+- One logical assertion per test. Multiple `assert` statements are OK if they verify one logical concept.
+- Assertion messages should describe expected vs actual when ambiguous:
+  ```python
+  assert response.status_code == 201, f"expected 201, got {response.status_code}"
+  ```

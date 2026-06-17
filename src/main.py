@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 #import database engine and models
 from src.db.database import engine
 from src.db import models
-from src.api import auth
+from src.api import auth, sessions
 
 #create sql tables in if they don't exist yet
 models.Base.metadata.create_all(bind=engine)
@@ -30,6 +30,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(sessions.router)
 
 @app.get("/")
 def health_check():

@@ -1,0 +1,126 @@
+---
+description: Project structure and architecture rules for the Joyful Coding Platform. Reference WORKFLOW_ARCHITECTURE_C.md and AGENT_ARCHITECTURE.md for full design context.
+globs: ["src/**/*.py"]
+alwaysApply: true
+---
+
+# Project Structure Rules
+
+The project is a multi-agent coding tutor backend. The five Agents are **Coordinator** (协调器), **Reflection** (反思者), **Mentor** (导师), **Analyzer** (分析器), and **Planner** (规划师). The state of any coding session lives in a **Blackboard** (黑板). All inter-agent communication goes through **Proposals** (提议).
+
+These names are intentional and non-negotiable — the user explicitly renamed them to remove ambiguity. Do not introduce synonyms like "Teacher" or "Coach".
+
+## 1. Module layout
+
+```
+src/
+├── main.py                    # FastAPI app entrypoint
+├── api/                       # Routers — one file per resource
+│   ├── auth.py
+│   ├── users.py
+│   └── sessions.py            # coding session WebSocket endpoints
+├── core/                      # Cross-cutting: security, config, logging
+│   ├── config.py              # pydantic-settings BaseSettings
+│   └── security.py            # JWT + password hashing
+├── db/                        # Database layer
+│   ├── database.py            # engine, SessionLocal, get_db
+│   └── models.py              # SQLAlchemy ORM models
+├── crud/                      # Database CRUD operations
+│   └── *.py                   # one per resource
+├── schemas/                   # Pydantic request/response models
+│   └── *.py
+└── services/                  # (to be added) Agent implementations
+    ├── blackboard/            # Blackboard + Proposal protocol
+    │   ├── coordinator.py     # Coordinator state machine
+    │   ├── proposal.py        # Proposal validation
+    │   └── timeline.py        # Append-only event log
+    ├── agents/
+    │   ├── mentor.py
+    │   ├── analyzer.py
+    │   ├── planner.py
+    │   └── reflection.py
+    ├── mcp/                   # MCP client wrappers (per service)
+    └── replay/
+        └── simulator.py       # Replay tool for analytics
+```
+
+## 2. Blackboard (黑板) regions
+
+The blackboard is divided into named regions. Each region has a write authority:
+
+| Region | Writer(s) | Readers |
+|---|---|---|
+| `timeline` | Coordinator (lifecycle events), Front-end (user actions) | All |
+| `stuck_hypotheses` | Analyzer | Coordinator, Mentor, Reflection |
+| `learning_plan_draft` | Planner | Coordinator, Mentor |
+| `chat_draft` | Mentor (then Reflection approves) | Coordinator, Front-end |
+| `code_snapshot` | Front-end (debounced) | Mentor, Analyzer |
+| `test_results` | Front-end (test runner) | Mentor, Analyzer, Planner |
+
+**Hard rule**: Agents can never write directly to a region. All writes go through a `Proposal` validated by the Coordinator. See `src/services/blackboard/proposal.py`.
+
+## 3. Speaking tokens (发言令牌)
+
+Only one Agent may "speak" (push a user-facing message) at a time. The Coordinator grants a Speaking Token based on priority:
+
+- **P0**: User typed in chat (always granted)
+- **P1**: Reflection vetoed Mentor's draft — Mentor re-drafting
+- **P2**: Mentor drafted a question and Reflection approved — push to user
+- **P3**: Analyzer hypothesis conf ≥ 0.8 AND user idle ≥ 60 s — proactive hint
+- **P4**: Planner updated learning_plan_draft — show "Practice next" card
+- **P5**: Test failed AND no Mentor message in last 30 s — instant prompt
+
+P3 is throttled: min 90 s between proactive hints. P3 is suppressed if the user passed a test in the last 15 s, is actively typing (last 5 s has keystrokes), or P0 is already queued.
+
+## 4. Coordinator rules
+
+The Coordinator is a **small, deterministic state machine with no LLM**. It does exactly three things:
+1. Accept or reject Proposals (against region write rules + version freshness).
+2. Grant Speaking Tokens (by priority, respecting throttle rules).
+3. Suppress outdated Mentor output.
+
+Do not put any LLM call inside the Coordinator. Do not put any business logic. The Coordinator is pure mechanism.
+
+## 5. Agent rules
+
+- Agents are **stateless per call**. They read the blackboard snapshot, return a Proposal, and forget.
+- Agents may run as long-lived processes only for streaming purposes. Even then, their internal state is rebuilt from the blackboard on restart.
+- Agents never talk to each other directly. Communication is always via Proposals.
+- The Reflection agent is **read-only** and may **veto** Mentor drafts. Reflection cannot write to the blackboard; vetoes are recorded as `MENTOR_VETO` events in `timeline`.
+
+## 6. MCP boundaries
+
+Each external service (problems-mcp, user-mcp, curriculum-mcp) has its own client module under `src/services/mcp/`. Agents call MCP clients — never the HTTP API directly. This is for testability and to keep rate-limiting and retries in one place.
+
+## 7. Latency budget
+
+For the proactive P3 flow ("user stuck for 1 minute"):
+
+```
+idle-tick → Analyzer re-evaluate → Proposal → Coordinator decide
+→ Mentor draft → Reflection check → WebSocket push
+
+Target: ≤ 1.5 s end-to-end.
+```
+
+If you're touching any code on this critical path, run the latency benchmark in `tests/perf/`.
+
+## 8. Replay & analytics
+
+The Timeline is append-only and authoritative. **Every** state-changing event must land in `timeline`. This is the basis for:
+- Replay (`src/services/replay/simulator.py`)
+- A/B testing Coordinator priority functions
+- Offline training of the Planner on `(learning_plan_draft, observed_outcomes)` pairs
+
+Never delete or rewrite `timeline` rows. Append only.
+
+## 9. Future modules (planned)
+
+- `src/services/agents/teacher.py` — **do not create**. The role was renamed to `planner.py` to disambiguate from "老师/助教". If you find this file, rename it to `planner.py`.
+- `src/services/agents/mentor.py`, `analyzer.py`, `planner.py`, `reflection.py` — Agents.
+- `src/services/blackboard/coordinator.py` — The state machine.
+- `src/services/blackboard/proposal.py` — Proposal validation.
+- `src/services/blackboard/timeline.py` — Append-only log.
+- `src/services/mcp/<service>.py` — One per MCP server.
+- `src/services/replay/simulator.py` — Replay tool.
+- `src/api/health.py` — Health check + degraded mode.

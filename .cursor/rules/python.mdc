@@ -1,0 +1,204 @@
+---
+description: Python style and library usage rules for the Joyful Coding Platform backend. Apply to all .py files under src/.
+globs: ["**/*.py", "**/*.pyi"]
+alwaysApply: true
+---
+
+# Python Style & Library Usage
+
+## 1. PEP 8 Compliance (Baseline)
+
+Follow PEP 8 strictly. The non-negotiable items:
+
+- **Indentation**: 4 spaces per level. No tabs. No mixing.
+- **Line length**: max 88 characters (Black default — not strict 79).
+- **Naming**:
+  - `snake_case` for functions, methods, variables, module-level constants that look like variables
+  - `PascalCase` for classes, Pydantic models, type aliases used as classes
+  - `UPPER_SNAKE_CASE` for true module-level constants (e.g., `MAX_RETRIES = 3`)
+  - `_leading_underscore` for module-private helpers; `__double_underscore` only for dunder methods
+  - Do not use single-letter names except for short comprehensions, loops, or `e`/`exc` in except clauses
+- **Imports**:
+  - One module per `import` line. Never `import os, sys`.
+  - Order: stdlib → third-party → first-party (`src.*`) → local. Separate groups with one blank line.
+  - Prefer absolute imports over relative. Use `from src.crud import user as user_crud`, not `from .crud import user`.
+  - Avoid wildcard imports (`from x import *`).
+- **Whitespace**:
+  - Two blank lines between top-level functions and classes.
+  - One blank line between methods inside a class.
+  - No trailing whitespace. One newline at end of file.
+- **Comments**:
+  - Complete sentences. Start with capital letter.
+  - Inline comments: two spaces before `#`.
+  - Avoid obvious narration comments. Only explain non-obvious intent, trade-offs, or constraints.
+- **String quotes**: Prefer double quotes `"`. Use single quotes only when the string contains double quotes.
+- **Trailing commas**: Include trailing commas in multi-line collections (Black-compatible style).
+- **Comparisons**: Use `is None` / `is not None` (never `== None`). Use `if x:` rather than `if x is True:`.
+- **Boolean traps**: Never compare to `True`/`False` with `==`. Use the bare expression.
+- **Type hints**: Required on every public function signature (parameters and return). Internal helpers may use `# type: ignore` sparingly with justification.
+- **Docstrings**: Required for every public module, class, and function. Use Google or NumPy style consistently (pick one — see §6).
+
+## 2. Specific PEP 8 Cases to Watch
+
+These are the violations that show up most often in code reviews. Call them out explicitly:
+
+- Mutable default arguments: **never** `def f(x=[])`. Use `None` and assign inside.
+- Late-binding closures in loops: capture with a default arg, e.g. `lambda x=i: ...`.
+- Bare `except:`: never. Use `except Exception:` at minimum, or a specific exception type.
+- `from module import *`: never.
+- Shadowing builtins: avoid `list`, `dict`, `id`, `type`, `input` as variable names.
+- Shadowing stdlib module names: do not name a local module `json.py`, `email.py`, `typing.py`, etc.
+- Comparing types with `==`: use `isinstance(x, MyClass)`.
+- String concatenation in loops: build a list and `''.join()`, or use a list comprehension.
+- `print()` for logging: use the `logging` module.
+- `time.sleep` for polling in async code: use `asyncio.sleep`.
+- Mixing `str` and `bytes` paths in file I/O: pick one mode and stay consistent.
+
+## 3. FastAPI Conventions
+
+The project uses FastAPI as the HTTP layer. Follow these conventions:
+
+### 3.1 Router organization
+- One `APIRouter` per resource/feature, in `src/api/<resource>.py`.
+- Always set `prefix` and `tags` on the router:
+  ```python
+  router = APIRouter(prefix="/users", tags=["Users"])
+  ```
+- Each route function name should describe the action: `create_user`, `get_current_user`, `list_problems`. Not `endpoint1`, `do_thing`.
+
+### 3.2 Dependencies
+- Use `Depends()` for DB sessions, current user, pagination, and any cross-cutting concern.
+- Never instantiate `Session()` inside a route handler.
+- Type-annotate dependencies in the signature: `db: Session = Depends(get_db)`.
+
+### 3.3 Response models
+- Always set `response_model=` on `@router.get/.post/.put/.patch` when returning a resource.
+- Use `status_code=` for non-200 success codes (201 for create, 204 for delete).
+- Return Pydantic schemas, never ORM models directly. Use `user_crud.get_user(...)` and let Pydantic serialize.
+
+### 3.4 Error handling
+- Raise `HTTPException` with a specific `status_code` and human-readable `detail`.
+- Never return a bare dict with an error message and a 200 status.
+- For 401, set `headers={"WWW-Authenticate": "Bearer"}`.
+
+### 3.5 Path & query parameters
+- Use `Path(...)` and `Query(...)` for validation, not raw types:
+  ```python
+  user_id: int = Path(..., gt=0, description="User ID")
+  limit: int = Query(50, ge=1, le=100)
+  ```
+- Path params use `snake_case` in the function signature but kebab-case or snake in the URL path itself.
+
+## 4. Pydantic v2 Conventions
+
+The project uses Pydantic 2.x. Important differences from v1:
+
+- Use `model_config = ConfigDict(from_attributes=True)` instead of v1's `class Config: orm_mode = True`.
+- Use `field_validator` / `model_validator` (not v1's `validator` / `root_validator`).
+- Use `Field(...)` for constraints, not v1's `Schema(...)` or `Field(..., regex=...)`.
+- Use `Annotated[str, Field(...)]` or `Annotated[str, StringConstraints(...)]` for reusable field types.
+- Immutability: prefer `model_config = ConfigDict(frozen=True)` for value objects.
+- Serialization: use `model_dump()` / `model_dump_json()` (not v1's `.dict()` / `.json()`).
+- Parsing: use `model_validate()` (not v1's `.parse_obj()`).
+- Discriminated unions: use `Field(discriminator=...)` with `Literal` tags.
+
+## 5. SQLAlchemy 2.0 Conventions
+
+The project uses SQLAlchemy 2.0 with psycopg2-binary (sync driver). Important patterns:
+
+### 5.1 ORM model style
+- Inherit from `DeclarativeBase` (2.0 style), not the legacy `declarative_base()`.
+- Use `Mapped[...]` type annotations on every column:
+  ```python
+  id: Mapped[int] = mapped_column(primary_key=True)
+  email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+  created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+  ```
+- Use `relationship(..., back_populates=...)` for bidirectional relationships.
+- Always set `nullable=False` explicitly (don't rely on default).
+
+### 5.2 Queries — use 2.0 style
+- Prefer `select()` + `session.execute(...).scalars().all()` over `session.query(...)`.
+- Use `session.execute(select(User).where(User.id == user_id)).scalar_one_or_none()` for single-row reads.
+- Never use `Query.first()`, `.all()` returning `None`, or implicit boolean evaluation of queries.
+
+### 5.3 Sessions
+- Use the FastAPI dependency `get_db` to inject sessions. Never create them globally.
+- Wrap multi-statement transactions in `with session.begin():`.
+- Use `session.add()` for inserts; `session.delete()` for deletes; mutate attributes for updates.
+- Always commit explicitly: `session.commit()`. Don't rely on autocommit.
+- Close the session via the dependency's `finally:` block (already done in `get_db`).
+
+### 5.4 Migrations
+- Any schema change must come with an Alembic migration. Never edit the DB by hand.
+- Migration files live in `alembic/versions/`. Name them `<sequence>_<description>.py`.
+
+## 6. Documentation Conventions
+
+- **Docstring style**: Google style. Example:
+  ```python
+  def get_user_by_email(db: Session, email: str) -> User | None:
+      """Retrieve a user by email address.
+
+      Args:
+          db: Active SQLAlchemy session.
+          email: Email address to look up.
+
+      Returns:
+          The User ORM object if found, else None.
+      """
+  ```
+- One-line docstrings for trivial functions are fine. No docstring is acceptable only for `_`-prefixed private helpers.
+- Module-level docstring at the top of every `__init__.py` and every non-trivial module.
+
+## 7. Logging
+
+- Use the `logging` module, configured at the application root.
+- Get a module logger: `logger = logging.getLogger(__name__)`.
+- Log levels: `DEBUG` for verbose internal traces, `INFO` for lifecycle events, `WARNING` for recoverable issues, `ERROR` for failures that need attention.
+- Never log secrets: passwords, JWT tokens, hashed passwords, email content with PII.
+- Never use `print()` in production code paths. The only acceptable use is in CLI scripts and debugging during local development.
+
+## 8. Error Handling Patterns
+
+- Catch the most specific exception you can handle. Re-raise the rest.
+- When catching broad exceptions, log the full traceback (`logger.exception(...)`).
+- Never `raise Exception(...)` from inside the library — raise a typed exception.
+- For validation errors at API boundaries, let Pydantic do the work; don't catch `ValidationError` and re-wrap unless you have a reason.
+- For DB constraint violations, catch `IntegrityError` and translate to a meaningful HTTP 409.
+
+## 9. Async vs Sync
+
+- The project uses sync SQLAlchemy (psycopg2-binary) under FastAPI. Route handlers are `def`, not `async def`, unless they genuinely do async I/O.
+- Don't mix `def` and `async def` for the same endpoint — pick one and stick with it.
+- `asyncio.sleep` for polling; never `time.sleep` in async paths.
+- Background tasks (e.g., sending emails, running the Planner Agent) should use `BackgroundTasks` (FastAPI built-in) for short jobs, or Celery / arq for long jobs.
+
+## 10. Security Conventions
+
+- **Passwords**: always hash with `passlib.context.CryptContext`. Never store plaintext. Never log passwords.
+- **JWT**: use `python-jose`. Sign with HS256 unless the project standard specifies RS256. Set `expires_delta` on every token. Never accept tokens with `verify_signature=False`.
+- **Input validation**: every request body comes through a Pydantic schema. Trust nothing from the client.
+- **SQL injection**: never use string interpolation to build SQL. Use parameter binding (SQLAlchemy parameterizes automatically with bound params).
+- **CORS**: explicit origins in `allow_origins`. Don't use `allow_origins=["*"]` in production.
+- **Secrets**: load from env via `pydantic-settings` (`BaseSettings`). Never commit `.env` files. Never hardcode keys.
+
+## 11. File & Module Layout
+
+- File name matches the primary class/function: `src/models/user.py` defines `class User`.
+- One module per concern. Don't cram multiple unrelated classes into one file.
+- `__init__.py` should re-export the public API: `from .user import User`.
+- Tests live in `tests/` mirroring `src/` structure: `tests/api/test_auth.py` for `src/api/auth.py`.
+
+## 12. Comments Policy (Do's and Don'ts)
+
+DO:
+- Explain **why** something is done a non-obvious way.
+- Reference a ticket, RFC, or doc link when relevant.
+- Mark TODOs with owner and date: `# TODO(jane, 2026-07-01): switch to Redis once available`.
+
+DON'T:
+- Don't narrate what the code does: `# loop over users`. Use meaningful variable names instead.
+- Don't leave commented-out code in commits. Delete it; git remembers.
+- Don't write ASCII art banners or decorative separators.
+- Don't write "this is the function that does X" docstring-style comments at the top of functions — use a docstring instead.
