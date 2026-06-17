@@ -34,3 +34,5 @@ app.include_router(auth.router)
 @app.get("/")
 def health_check():
     return {"status": "healthy", "message": "Welcome to the LeetCode AI API"}
+
+#uvicorn src.main:app --reload
