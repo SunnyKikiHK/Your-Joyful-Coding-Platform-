@@ -1,13 +1,15 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
-#import database engine and models
 from src.db.database import engine
 from src.db import models
-from src.api import auth
+from src.api import auth, users
 
-#create sql tables in if they don't exist yet
 models.Base.metadata.create_all(bind=engine)
+
+os.makedirs("static/avatars", exist_ok=True)
 
 app = FastAPI(
     title="LeetCode AI Clone API",
@@ -29,10 +31,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# SERVE STATIC FILES: Allows frontend to access images via http://127.0.0.1:8000/static/avatars/...
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+#attach the routers APIs
 app.include_router(auth.router)
+app.include_router(users.router)
 
 @app.get("/")
 def health_check():
-    return {"status": "healthy", "message": "Welcome to the LeetCode AI API"}
-
-#uvicorn src.main:app --reload
+    return {"status": "healthy", "message": "Welcome to your joyful coding platform AI API (we love viber!)"}

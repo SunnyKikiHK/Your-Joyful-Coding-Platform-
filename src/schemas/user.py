@@ -11,6 +11,7 @@ class UserResponse(UserBase):
     id: int
     is_active: bool
     problems_solved: int
+    profile_picture_url: str
 
     class Config:
         from_attributes = True
