@@ -2,11 +2,34 @@
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   background-color: #f3f4f6;
   color: #1f2937;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+}
+
+/* =======================================
+   Layout & Auth Pages
+======================================== */
+.app-layout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content {
+  padding: 30px;
+  flex: 1;
+}
+
+/* Create a specific wrapper just to center the Auth cards */
+.auth-wrapper {
   display: flex;
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  margin: 0;
 }
 
 .container {
@@ -15,6 +38,76 @@
   padding: 20px;
 }
 
+/* =======================================
+   Navbar Styling
+======================================== */
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: white;
+  padding: 0 30px;
+  height: 70px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.nav-left {
+  display: flex;
+  gap: 30px;
+}
+
+.nav-link {
+  color: #4b5563;
+  font-weight: 500;
+  font-size: 16px;
+  transition: color 0.2s;
+}
+
+.nav-link:hover {
+  color: #3b82f6;
+  text-decoration: none;
+}
+
+.nav-right {
+  display: flex;
+  align-items: center;
+}
+
+/* Profile Picture & Dropdown */
+.profile-container {
+  position: relative;
+}
+
+.profile-pic {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color 0.2s;
+}
+
+.profile-pic:hover {
+  border-color: #3b82f6;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 55px;
+  right: 0;
+  width: 200px;
+  min-height: 100px;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e5e7eb;
+  z-index: 50;
+}
+
+/* =======================================
+   Cards & Forms (From before)
+======================================== */
 .card {
   background: white;
   padding: 30px;
@@ -80,8 +173,4 @@ button:hover {
 a {
   color: #3b82f6;
   text-decoration: none;
-}
-
-a:hover {
-  text-decoration: underline;
 }

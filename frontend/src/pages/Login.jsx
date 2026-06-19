@@ -29,28 +29,30 @@ export default function Login() {
     };
 
     return (
-        <div className="container">
-            <div className="card">
-                <h2>Welcome Back</h2>
-                {error && <div className="error">{error}</div>}
-                <form onSubmit={handleSubmit}>
-                    <input 
-                        type="text" 
-                        placeholder="Username or Email" 
-                        required 
-                        value={formData.username}
-                        onChange={(e) => setFormData({...formData, username: e.target.value})}
-                    />
-                    <input 
-                        type="password" 
-                        placeholder="Password" 
-                        required 
-                        value={formData.password}
-                        onChange={(e) => setFormData({...formData, password: e.target.value})}
-                    />
-                    <button type="submit">Log In</button>
-                </form>
-                <p>Need an account? <Link to="/register">Sign up</Link></p>
+        <div className="auth-wrapper">
+            <div className="container">
+                <div className="card">
+                    <h2>Welcome Back</h2>
+                    {error && <div className="error">{error}</div>}
+                    <form onSubmit={handleSubmit}>
+                        <input 
+                            type="text" 
+                            placeholder="Username or Email" 
+                            required 
+                            value={formData.username}
+                            onChange={(e) => setFormData({...formData, username: e.target.value})}
+                        />
+                        <input 
+                            type="password" 
+                            placeholder="Password" 
+                            required 
+                            value={formData.password}
+                            onChange={(e) => setFormData({...formData, password: e.target.value})}
+                        />
+                        <button type="submit">Log In</button>
+                    </form>
+                    <p>Need an account? <Link to="/register">Sign up</Link></p>
+                </div>
             </div>
         </div>
     );

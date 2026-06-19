@@ -19,35 +19,37 @@ export default function Register() {
     };
 
     return (
-        <div className="container">
-            <div className="card">
-                <h2>Create Account</h2>
-                {error && <div className="error">{error}</div>}
-                <form onSubmit={handleSubmit}>
-                    <input 
-                        type="text" 
-                        placeholder="Username" 
-                        required 
-                        value={formData.username}
-                        onChange={(e) => setFormData({...formData, username: e.target.value})}
-                    />
-                    <input 
-                        type="email" 
-                        placeholder="Email" 
-                        required 
-                        value={formData.email}
-                        onChange={(e) => setFormData({...formData, email: e.target.value})}
-                    />
-                    <input 
-                        type="password" 
-                        placeholder="Password" 
-                        required 
-                        value={formData.password}
-                        onChange={(e) => setFormData({...formData, password: e.target.value})}
-                    />
-                    <button type="submit">Sign Up</button>
-                </form>
-                <p>Already have an account? <Link to="/login">Log in</Link></p>
+        <div className="auth-wrapper">
+            <div className="container">
+                <div className="card">
+                    <h2>Create Account</h2>
+                    {error && <div className="error">{error}</div>}
+                    <form onSubmit={handleSubmit}>
+                        <input 
+                            type="text" 
+                            placeholder="Username" 
+                            required 
+                            value={formData.username}
+                            onChange={(e) => setFormData({...formData, username: e.target.value})}
+                        />
+                        <input 
+                            type="email" 
+                            placeholder="Email" 
+                            required 
+                            value={formData.email}
+                            onChange={(e) => setFormData({...formData, email: e.target.value})}
+                        />
+                        <input 
+                            type="password" 
+                            placeholder="Password" 
+                            required 
+                            value={formData.password}
+                            onChange={(e) => setFormData({...formData, password: e.target.value})}
+                        />
+                        <button type="submit">Sign Up</button>
+                    </form>
+                    <p>Already have an account? <Link to="/login">Log in</Link></p>
+                </div>
             </div>
         </div>
     );
