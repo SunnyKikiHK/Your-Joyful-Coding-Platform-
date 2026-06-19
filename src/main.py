@@ -41,3 +41,5 @@ app.include_router(users.router)
 @app.get("/")
 def health_check():
     return {"status": "healthy", "message": "Welcome to your joyful coding platform AI API (we love viber!)"}
+
+# uvicorn src.main:app --reload

@@ -14,7 +14,6 @@ export default function Home() {
         }
 
         try {
-            // Decode the token to extract the 'sub' (subject) which we set as the username in FastAPI
             const decoded = jwtDecode(token);
             setUsername(decoded.sub);
         } catch (error) {
@@ -23,17 +22,12 @@ export default function Home() {
         }
     }, [navigate]);
 
-    const handleLogout = () => {
-        localStorage.removeItem('token');
-        navigate('/login');
-    };
-
     return (
         <div className="container">
             <div className="card">
                 <h1>Dashboard</h1>
-                <p>You are logged in as: <strong>{username}</strong></p>
-                <button onClick={handleLogout} className="logout-btn">Log Out</button>
+                <p>Welcome back, <strong>{username}</strong>!</p>
+                {/* Redundant Log Out button removed! */}
             </div>
         </div>
     );

@@ -1,13 +1,19 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../api/axiosConfig';
 
 export default function Navbar() {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const navigate = useNavigate();
     
-    //default image URL pointing to your FastAPI static folder
-    //fetch the actual user's URL from the backend later
     const avatarUrl = `${api.defaults.baseURL}/static/avatars/default.png`;
+
+    const handleLogout = () => {
+        //remove the jwt token from local storage
+        localStorage.removeItem('token');
+        //redirect the user back to the login page
+        navigate('/login');
+    };
 
     return (
         <nav className="navbar">
@@ -26,10 +32,22 @@ export default function Navbar() {
                         onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                     />
                     
-                    {/* The Empty Dropdown Menu */}
+                    {/* pfp drop down menu */}
                     {isDropdownOpen && (
                         <div className="dropdown-menu">
-                            {/* Dropdown items will go here later */}
+                            <Link 
+                                to="/profiles" 
+                                className="dropdown-item"
+                                onClick={() => setIsDropdownOpen(false)}
+                            >
+                                Profiles
+                            </Link>
+                            <button 
+                                onClick={handleLogout} 
+                                className="dropdown-item logout-dropdown-btn"
+                            >
+                                Log out
+                            </button>
                         </div>
                     )}
                 </div>
