@@ -2,8 +2,15 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axiosConfig';
 
+const ALL_TOPICS = [
+    "Array", "String", "Hash Table", "Dynamic Programming", "Math", 
+    "Sorting", "Greedy", "Depth-First Search", "Binary Search", 
+    "Tree", "Matrix", "Two Pointers", "Breadth-First Search"
+].sort();
+
 export default function Home() {
     const [questions, setQuestions] = useState([]);
+    const [totalQuestions, setTotalQuestions] = useState(0); // NEW: Track total matching items
     
     // Filter States
     const [searchQuery, setSearchQuery] = useState('');
@@ -17,31 +24,47 @@ export default function Home() {
 
     const navigate = useNavigate();
 
-    // Fetch questions on mount
+    // Server-Side Fetch Logic
     useEffect(() => {
         const fetchQuestions = async () => {
             try {
-                // We request a large limit so we can filter and paginate smoothly on the client side
-                const response = await api.get('/questions/?skip=0&limit=1000');
-                setQuestions(response.data);
+                // Build the URL parameters securely
+                const params = new URLSearchParams({
+                    skip: (currentPage - 1) * questionsPerPage,
+                    limit: questionsPerPage,
+                });
+
+                if (searchQuery) params.append('search', searchQuery);
+                if (difficultyFilter !== 'All') params.append('difficulty', difficultyFilter);
+                selectedTopics.forEach(t => params.append('topics', t));
+
+                //the request now returns { total: X, items: [...] }
+                const response = await api.get(`/questions/?${params.toString()}`);
+                setQuestions(response.data.items);
+                setTotalQuestions(response.data.total);
             } catch (error) {
+                if (error.response?.status === 401) {
+                    localStorage.removeItem('token');
+                    navigate('/login');
+                }
                 console.error("Failed to fetch questions", error);
             }
         };
         
-        // Ensure user is authenticated
         const token = localStorage.getItem('token');
         if (!token) {
             navigate('/login');
         } else {
             fetchQuestions();
         }
-    }, [navigate]);
+    }, [navigate, currentPage, searchQuery, difficultyFilter, selectedTopics]); //refetch when any of these change
 
-    // Dynamically extract all unique topics from the available questions
-    const allTopics = [...new Set(questions.flatMap(q => q.topics || []))].sort();
+    //reset to page 1 whenever filters change
+    useEffect(() => {
+        setCurrentPage(1);
+        setPageInput(1);
+    }, [searchQuery, difficultyFilter, selectedTopics]);
 
-    // Toggle multi-select topics
     const toggleTopic = (topic) => {
         setSelectedTopics(prev => 
             prev.includes(topic) 
@@ -50,33 +73,8 @@ export default function Home() {
         );
     };
 
-    // Advanced Client-Side Filtering Logic
-    const filteredQuestions = questions.filter(q => {
-        const matchesSearch = 
-            q.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-            (q.topics && q.topics.some(t => t.toLowerCase().includes(searchQuery.toLowerCase())));
-        
-        const matchesDifficulty = difficultyFilter === 'All' || q.difficulty === difficultyFilter;
-        
-        // If topics are selected, the question MUST contain ALL selected topics
-        const matchesTopics = selectedTopics.length === 0 || 
-            selectedTopics.every(t => q.topics && q.topics.includes(t));
-
-        return matchesSearch && matchesDifficulty && matchesTopics;
-    });
-
-    // Reset to page 1 whenever filters change
-    useEffect(() => {
-        setCurrentPage(1);
-        setPageInput(1);
-    }, [searchQuery, difficultyFilter, selectedTopics]);
-
-    // Pagination Logic
-    const totalPages = Math.ceil(filteredQuestions.length / questionsPerPage) || 1;
-    const paginatedQuestions = filteredQuestions.slice(
-        (currentPage - 1) * questionsPerPage, 
-        currentPage * questionsPerPage
-    );
+    // Calculate total pages dynamically from the server response
+    const totalPages = Math.ceil(totalQuestions / questionsPerPage) || 1;
 
     const handlePageSubmit = (e) => {
         e.preventDefault();
@@ -84,7 +82,7 @@ export default function Home() {
         if (newPage >= 1 && newPage <= totalPages) {
             setCurrentPage(newPage);
         } else {
-            setPageInput(currentPage); // Revert if invalid
+            setPageInput(currentPage);
         }
     };
 
@@ -92,7 +90,7 @@ export default function Home() {
         <div className="dashboard-container">
             <h1 className="dashboard-title">Problem Set</h1>
 
-            {/* CONTROL PANEL: Search & Filters */}
+            {/* CONTROL PANEL */}
             <div className="control-panel">
                 <div className="search-row">
                     <input 
@@ -117,7 +115,7 @@ export default function Home() {
                 <div className="topics-row">
                     <span className="topics-label">Filter by Topic:</span>
                     <div className="topics-container">
-                        {allTopics.map(topic => (
+                        {ALL_TOPICS.map(topic => (
                             <button 
                                 key={topic} 
                                 className={`topic-pill ${selectedTopics.includes(topic) ? 'active' : ''}`}
@@ -142,8 +140,8 @@ export default function Home() {
                         </tr>
                     </thead>
                     <tbody>
-                        {paginatedQuestions.length > 0 ? (
-                            paginatedQuestions.map((q) => (
+                        {questions.length > 0 ? (
+                            questions.map((q) => (
                                 <tr key={q.id} className="question-row" onClick={() => navigate(`/problems/${q.id}`)}>
                                     <td><div className="status-circle unsolved"></div></td>
                                     <td className="question-title">{q.title}</td>

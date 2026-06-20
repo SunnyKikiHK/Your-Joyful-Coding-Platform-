@@ -1,5 +1,5 @@
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from src.db.database import get_db
@@ -10,12 +10,22 @@ router = APIRouter(prefix="/questions", tags=["Questions"])
 
 @router.post("/", response_model=question_schemas.QuestionResponse, status_code=201)
 def create_question(question: question_schemas.QuestionCreate, db: Session = Depends(get_db)):
-    #in production, add an admin dependency here to allow admins to create questions
     return question_crud.create_question(db=db, question=question)
 
-@router.get("/", response_model=List[question_schemas.QuestionResponse])
-def read_questions(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return question_crud.get_questions(db, skip=skip, limit=limit)
+#exposes query parameters for the React frontend
+@router.get("/", response_model=question_schemas.PaginatedQuestionResponse)
+def read_questions(
+    skip: int = 0, 
+    limit: int = 50, 
+    search: Optional[str] = None,
+    difficulty: Optional[str] = None,
+    topics: List[str] = Query(default=[]),
+    db: Session = Depends(get_db)
+):
+    total, items = question_crud.get_questions(
+        db, skip=skip, limit=limit, search=search, difficulty=difficulty, topics=topics
+    )
+    return {"total": total, "items": items}
 
 @router.get("/{question_id}", response_model=question_schemas.QuestionResponse)
 def read_question(question_id: int, db: Session = Depends(get_db)):

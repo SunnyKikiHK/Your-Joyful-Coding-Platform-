@@ -25,3 +25,8 @@ class QuestionResponse(QuestionBase):
 
     class Config:
         from_attributes = True
+
+#wrapper schema for server-side pagination
+class PaginatedQuestionResponse(BaseModel):
+    total: int
+    items: List[QuestionResponse]
