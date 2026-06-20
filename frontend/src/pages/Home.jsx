@@ -10,25 +10,30 @@ const ALL_TOPICS = [
 
 export default function Home() {
     const [questions, setQuestions] = useState([]);
-    const [totalQuestions, setTotalQuestions] = useState(0); // NEW: Track total matching items
+    const [totalQuestions, setTotalQuestions] = useState(0); 
     
-    // Filter States
-    const [searchQuery, setSearchQuery] = useState('');
-    const [difficultyFilter, setDifficultyFilter] = useState('All');
-    const [selectedTopics, setSelectedTopics] = useState([]);
+    // Initialize state from sessionStorage if it exists, otherwise use defaults
+    const [searchQuery, setSearchQuery] = useState(sessionStorage.getItem('searchQuery') || '');
+    const [difficultyFilter, setDifficultyFilter] = useState(sessionStorage.getItem('difficultyFilter') || 'All');
+    const [selectedTopics, setSelectedTopics] = useState(JSON.parse(sessionStorage.getItem('selectedTopics')) || []);
+    const [currentPage, setCurrentPage] = useState(parseInt(sessionStorage.getItem('currentPage')) || 1);
+    const [pageInput, setPageInput] = useState(parseInt(sessionStorage.getItem('currentPage')) || 1);
     
-    // Pagination States
-    const [currentPage, setCurrentPage] = useState(1);
-    const [pageInput, setPageInput] = useState(1);
     const questionsPerPage = 50;
-
     const navigate = useNavigate();
+
+    // Save states to sessionStorage whenever they change
+    useEffect(() => {
+        sessionStorage.setItem('searchQuery', searchQuery);
+        sessionStorage.setItem('difficultyFilter', difficultyFilter);
+        sessionStorage.setItem('selectedTopics', JSON.stringify(selectedTopics));
+        sessionStorage.setItem('currentPage', currentPage);
+    }, [searchQuery, difficultyFilter, selectedTopics, currentPage]);
 
     // Server-Side Fetch Logic
     useEffect(() => {
         const fetchQuestions = async () => {
             try {
-                // Build the URL parameters securely
                 const params = new URLSearchParams({
                     skip: (currentPage - 1) * questionsPerPage,
                     limit: questionsPerPage,
@@ -38,7 +43,6 @@ export default function Home() {
                 if (difficultyFilter !== 'All') params.append('difficulty', difficultyFilter);
                 selectedTopics.forEach(t => params.append('topics', t));
 
-                //the request now returns { total: X, items: [...] }
                 const response = await api.get(`/questions/?${params.toString()}`);
                 setQuestions(response.data.items);
                 setTotalQuestions(response.data.total);
@@ -57,9 +61,9 @@ export default function Home() {
         } else {
             fetchQuestions();
         }
-    }, [navigate, currentPage, searchQuery, difficultyFilter, selectedTopics]); //refetch when any of these change
+    }, [navigate, currentPage, searchQuery, difficultyFilter, selectedTopics]); 
 
-    //reset to page 1 whenever filters change
+    // Reset to page 1 whenever search, difficulty, or topics change
     useEffect(() => {
         setCurrentPage(1);
         setPageInput(1);
@@ -73,7 +77,6 @@ export default function Home() {
         );
     };
 
-    // Calculate total pages dynamically from the server response
     const totalPages = Math.ceil(totalQuestions / questionsPerPage) || 1;
 
     const handlePageSubmit = (e) => {

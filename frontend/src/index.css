@@ -443,3 +443,199 @@ a {
   padding: 8px;
   text-align: center;
 }
+
+/* =======================================
+   ProblemWorkspace Page: Dashboard & Problem List
+======================================== */
+.workspace-container {
+  display: flex;
+  height: calc(100vh - 70px); /* Fill screen underneath navbar */
+  background-color: #f3f4f6;
+  gap: 8px;
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+.workspace-panel {
+  background: white;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Left Side: Description */
+.description-panel {
+  flex: 1; /* Takes up half the screen */
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.workspace-title {
+  font-size: 24px;
+  margin: 0;
+  color: #111827;
+}
+
+.workspace-topics {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.workspace-description {
+  font-size: 15px;
+  line-height: 1.6;
+  color: #374151;
+  margin-bottom: 32px;
+}
+
+.workspace-testcases h3 {
+  font-size: 16px;
+  color: #111827;
+  margin-bottom: 12px;
+}
+
+.testcase-card {
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  font-family: monospace;
+  font-size: 14px;
+}
+
+.testcase-card p {
+  margin: 4px 0;
+}
+
+/* Right Side: Editor & Console */
+.editor-panel {
+  flex: 1; /* Takes up the other half */
+  background-color: #1e1e1e; /* VS Code dark background */
+}
+
+.editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  background-color: #2d2d2d;
+  border-bottom: 1px solid #404040;
+}
+
+.language-select {
+  background-color: #3c3c3c;
+  color: white;
+  border: 1px solid #555;
+  padding: 6px 30px 6px 12px;
+}
+
+.run-btn {
+  background-color: #10b981; /* Distinct green for running code */
+  padding: 8px 20px;
+  font-size: 14px;
+}
+
+.run-btn:hover {
+  background-color: #059669;
+}
+
+.run-btn:disabled {
+  background-color: #6ee7b7;
+  cursor: not-allowed;
+}
+
+.monaco-wrapper {
+  flex: 1; /* Stretches editor to fill available space above console */
+  min-height: 300px;
+}
+
+/* Output Console */
+.console-panel {
+  height: 250px;
+  background-color: white;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+}
+
+.console-header {
+  padding: 12px 16px;
+  background-color: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  font-weight: 600;
+  color: #4b5563;
+  font-size: 14px;
+}
+
+.console-body {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.console-placeholder {
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.result-status {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+}
+
+.console-result.success .result-status { color: #10b981; }
+.console-result.error .result-status { color: #ef4444; }
+
+.error-details {
+  background-color: #fee2e2;
+  color: #991b1b;
+  padding: 12px;
+  border-radius: 6px;
+  margin-top: 12px;
+  font-family: monospace;
+}
+
+.error-details pre {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.loading-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: calc(100vh - 70px);
+  font-size: 18px;
+  color: #6b7280;
+}
+
+.workspace-back-btn {
+  background: none;
+  border: none;
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s;
+}
+
+.workspace-back-btn:hover {
+  background-color: transparent;
+  color: #111827;
+}
