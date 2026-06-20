@@ -1,0 +1,19 @@
+POST request to http://127.0.0.1:8000/questions/ with this exact JSON payload to create a test question:
+
+{
+  "title": "Two Sum",
+  "difficulty": "Easy",
+  "topics": ["Array", "Hash Table"],
+  "description": "Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.",
+  "test_cases": [
+    {
+      "input": "twoSum([2, 7, 11, 15], 9)",
+      "expected_output": "[0, 1]"
+    },
+    {
+      "input": "twoSum([3, 2, 4], 6)",
+      "expected_output": "[1, 2]"
+    }
+  ]
+}
+
