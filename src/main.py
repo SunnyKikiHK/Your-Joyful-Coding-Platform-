@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 
 from src.db.database import engine
 from src.db import models
-from src.api import auth, users
+from src.api import auth, users, questions, submissions
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -37,6 +37,8 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 #attach the routers APIs
 app.include_router(auth.router)
 app.include_router(users.router)
+app.include_router(questions.router)   # 2. ATTACH THE QUESTIONS ROUTER
+app.include_router(submissions.router) # 3. ATTACH THE SUBMISSIONS ROUTER
 
 @app.get("/")
 def health_check():
